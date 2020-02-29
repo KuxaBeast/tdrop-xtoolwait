@@ -1,5 +1,5 @@
 * About
 This is a tdrop fork but using an external script xtoolwait (on AUR =xtoolwait-git=).
-It was created to support few programs (like suckless tabbed) which doesn't work yet with the upsteam version.
+It was created to support few programs (like suckless tabbed) which doesn't work yet with the upstream version.
 
 Just don't forget to install xtoolwait, because I basically replaced hundred lines of code with just one call to this utility.
