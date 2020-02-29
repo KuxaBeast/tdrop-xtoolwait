@@ -25,9 +25,7 @@ options:
 	-L cmd		provide a command to float the window after it is mapped
 	-p cmd		provide a pre-map command
 	-P cmd		provide a post-map command
-	-u cmd		provide a pre-unmap command
-	-U cmd		provide a post-unmap command
-	-d XxY		give decoration/border size to accurately restore window
+	-u cmd		provide a pre-unmap command -U cmd		provide a post-unmap command -d XxY		give decoration/border size to accurately restore window
 			position; only applicable with auto_show
 	-S cmd		can be used to fix saved geometry with auto_hide; see manpage
 	-i cmd		provide a command to detect whether the current window is a
@@ -534,88 +532,6 @@ maybe_cancel_auto_show() {
 	fi
 }
 
-# * Dropdown Initialization
-# TODO ideally this function wouldn't be necessary and some external program
-# (something like xtoolwait) could be used to return the wid
-create_win_return_wid() {
-	local blacklist program_command pid visible_wid wids wid program_wid
-	# blacklist all existing wids of program
-	# (for programs where one pid shares all wids)
-	blacklist=$(xdotool search --classname "$program")
-	# for programs where $! won't always work (e.g. one pid for all windows)
-	if [[ $program =~ ^(tilix|xfce4-terminal)$ ]]; then
-		pid=$(pgrep -x "$program")
-	elif [[ $program == urxvtc ]]; then
-		blacklist=$(xdotool search --classname urxvtd)
-		pid=$(pgrep -x urxvtd)
-	elif [[ $program == xiatec ]]; then
-		pid=$(pgrep -x xiate)
-	elif [[ $program == chromium ]]; then
-		# this may work fine
-		# pid=$(pgrep -xo chromium)
-		pid=$(pgrep -xa chromium | gawk '!/--type/ {print $1}')
-	elif [[ $program == chromium-browser ]]; then
-		pid=$(pgrep -xa chromium-browse | gawk '!/--type/ {print $1}')
-	elif [[ $program =~ ^google-chrome ]]; then
-		pid=$(pgrep -xa chrome | gawk '!/--type/ {print $1}')
-	elif [[ $program =~ ^emacsclient ]]; then
-		blacklist=$(xdotool search --classname emacs)
-	fi
-	# need to redirect stdout or function won't return
-	"$@" > /dev/null &
-	if [[ -z $pid ]]; then
-		# for normal programs
-		# also for when one of the programs above hadn't already been started
-		pid=$!
-	fi
-	visible_wid=false
-	counter=0
-	while : ; do
-		if [[ $program == gnome-terminal ]]; then
-			# only 1 pid; changes at some point after first run
-			# actual process name for me is gnome-terminal-
-			pid=$(pgrep gnome-terminal)
-		fi
-		if [[ $program == discord ]]; then
-			wids=$(xdotool search --classname discord)
-			blacklist=
-		elif [[ $program == qutebrowser ]]; then
-			# one pid, but can't use for getting wids with xdotool
-			wids=$(xdotool search --classname qutebrowser)
-		elif [[ $program =~ ^emacsclient ]]; then
-			wids=$(xdotool search --classname emacs)
-		else
-			wids=$(xdotool search --pid "$pid")
-		fi
-		if [[ -n $wids ]]; then
-			while read -r wid; do
-				if [[ ! $blacklist =~ (^|$'\n')$wid($|$'\n') ]] && \
-					   [[ $(get_visibility "$wid") == IsViewable ]]; then
-					visible_wid=true
-					program_wid=$wid
-				fi
-			done <<< "$wids"
-		fi
-		if $visible_wid; then
-			break
-		fi
-		((counter=counter+1))
-		if [[ $counter -gt $((timeout * 100)) ]]; then
-			error "Exceeded timeout of $timeout seconds waiting for program."
-		fi
-		sleep 0.01
-	done
-	# workaround for urxvt tabbed plugin using -embed
-	if [[ $program =~ urxvt ]] && [[ -n $program_wid ]]; then
-		maybe_program_wid=$(xprop -id "$program_wid" | \
-								gawk -F '"' '/-embed/ {print $6}')
-		if [[ -n $maybe_program_wid ]]; then
-			program_wid=$maybe_program_wid
-		fi
-	fi
-	echo -n "$program_wid"
-}
-
 program_start() {
 	local program_command tmux_command wid
 	program_command=("$program")
@@ -641,7 +557,7 @@ program_start() {
 			program_command+=(-e "\"bash -c $tmux_command\"")
 		fi
 	fi
-	wid=$(create_win_return_wid "${program_command[@]}")
+	wid=$(xtoolwait -wid "${program_command[@]}")
 	if [[ -n $name ]]; then
 		xdotool set_window --name "$name" "$wid"
 	fi
